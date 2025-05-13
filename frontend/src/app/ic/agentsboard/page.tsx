@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { listPolicies, updatePolicyStatus, Policy } from '@/utils/api/policy';
 
 interface Agent {
   id: number;

@@ -4,6 +4,7 @@ import React from 'react';
 import Sidebar from '@/components/admin/sidebar';
 import AvatarMenu from '@/components/common/avatar';
 
+
 export default function AdminDashboard() {
   return (
     <div className="flex min-h-screen bg-gray-100 text-black">

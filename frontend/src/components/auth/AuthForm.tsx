@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loginUser } from '@/utils/api/user';
 import { jwtDecode } from 'jwt-decode';
+import Footer from '@/components/footer/footer';
+import RegisterForm from './Register';
+import React from 'react'; // Import React
 
 interface LoginFormProps {
   onSwitch: () => void;
@@ -17,7 +20,24 @@ interface TokenPayload {
   exp: number;
 }
 
-export default function LoginForm({ onSwitch }: LoginFormProps) {
+export default function AuthPage() {
+  const [showLogin, setShowLogin] = useState(true);
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-teal-50 to-green-100 p-4">
+        {showLogin ? (
+          <LoginForm onSwitch={() => setShowLogin(false)} />
+        ) : (
+          <RegisterForm onSwitch={() => setShowLogin(true)} />
+        )}
+      </div>
+      <Footer />
+    </div>
+  );
+}
+
+const LoginForm: React.FC<LoginFormProps> = ({ onSwitch }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,7 +94,7 @@ export default function LoginForm({ onSwitch }: LoginFormProps) {
           id="username"
           type="text"
           value={username}
-          onChange={e => setUsername(e.target.value)}
+          onChange={(e) => setUsername(e.target.value)}
           required
           placeholder="your.username"
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-green-500"
@@ -89,7 +109,7 @@ export default function LoginForm({ onSwitch }: LoginFormProps) {
           id="password"
           type="password"
           value={password}
-          onChange={e => setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.target.value)}
           required
           placeholder="••••••••"
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-green-500"
@@ -115,4 +135,4 @@ export default function LoginForm({ onSwitch }: LoginFormProps) {
       </p>
     </form>
   );
-}
+};
