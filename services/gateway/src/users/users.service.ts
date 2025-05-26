@@ -33,6 +33,7 @@ export class UsersService {
           headers: {
             Authorization: `Bearer ${token}`,
           }
+
         }),
       );
       return response.data;
