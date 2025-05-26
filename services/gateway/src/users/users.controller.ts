@@ -41,10 +41,13 @@ export class UsersController {
   @Post()
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({ status: 201, description: 'User created successfully' })
-  async createUser(
-    @Body() userCreate: any,
-    @Headers('authorization') authHeader?: string, // Made optional) {
-    return this.usersService.createUser(userCreate,authHeader);
+  async createUser(@Body() userCreate: any,@Headers('authorization') authHeader?: string){
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Missing or invalid Authorization header');
+    }
+
+    const token = authHeader.replace('Bearer ', '').trim();
+    return this.usersService.createUser(token, userCreate, authHeader);
   }
 
   @Post('agent')
@@ -52,14 +55,12 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   async createAgent(
     @Body() agentDto: any,
-    @Headers('authorization') authHeader?: string, // Made optional) {
+    @Headers('authorization') authHeader?: string,) {
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedException('Missing or invalid Authorization header');
     }
-
     const token = authHeader.replace('Bearer ', '').trim();
-
     return this.usersService.createAgent(token, agentDto,authHeader);
   }
 

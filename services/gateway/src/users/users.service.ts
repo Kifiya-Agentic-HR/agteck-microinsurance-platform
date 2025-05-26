@@ -25,10 +25,15 @@ export class UsersService {
     }
   }
 
-  async createUser(userCreate: any) {
+  async createUser(userCreate: any, token: string, agentData: any, authHeader?: string) {
     try {
+      const headers = authHeader ? { Authorization: authHeader } : {};
       const response = await firstValueFrom(
-        this.httpService.post(`${USER_SERVICE_BASE_URL}/`, userCreate),
+        this.httpService.post(`${USER_SERVICE_BASE_URL}/`, { ...userCreate, ...agentData }, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          }
+        }),
       );
       return response.data;
     } catch (error: any) {
