@@ -346,6 +346,8 @@ services:
     container_name: claim_service
     env_file:
       - .env
+    ports:
+      - "8040:8000"
     depends_on:
       claim_db:
         condition: service_healthy  # Add healthcheck dependency

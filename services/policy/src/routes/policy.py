@@ -98,28 +98,29 @@ def list_policies_endpoint(
 async def list_policy_details_endpoint(db: Session = Depends(get_db)):
     cache_key = "cached_policy_details"
 
+    # Attempt to fetch from Redis cache
+    cached_data = None
     try:
         cached_data = await redis_client.get(cache_key)
         if cached_data:
+            logger.info("[CACHE] Returning cached policy details.")
             return json.loads(cached_data)
     except Exception as e:
-        # Log and continue to fallback to DB
-        print(f"[Redis] Cache read failed: {e}")
+        logger.warning(f"[Redis] Cache read failed: {e}")
 
-    if cached_data:
-        logger.info("[CACHE] Returning cached policy details.")
-    else:
-        logger.info("[CACHE MISS] Fetching policy details from DB.")
-
+    # If cache miss, get from DB
+    logger.info("[CACHE MISS] Fetching policy details from DB.")
     try:
         details = list_policy_details(db)
     except Exception as e:
+        logger.error(f"[DB] Error fetching policy details: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch policy details from DB.")
 
+    # Try to cache the result
     try:
-        await redis_client.set(cache_key, json.dumps(details), ex=60)  # cache for 1 min
+        await redis_client.set(cache_key, json.dumps(details), ex=60)  # 60 seconds TTL
     except Exception as e:
-        print(f"[Redis] Cache write failed: {e}")
+        logger.warning(f"[Redis] Cache write failed: {e}")
 
     return details
 

@@ -542,6 +542,22 @@ async def get_claims_grouped_by_customer(db: Session = Depends(get_db)):
     print(f"Successfully aggregated claims for {len(result)} customers. Returning result.")
     return result
 
+@router.get("/claims/by-customer/{customer_id}", response_model=List[float], tags=["claims"])
+async def get_claim_amounts_by_customer(customer_id: int, db: Session = Depends(get_db)):
+    print(f"Received request for claim amounts for customer_id {customer_id}")
+    
+    claims = db.query(Claim).filter(Claim.customer_id == customer_id).all()
+
+    if not claims:
+        print(f"No claims found for customer_id {customer_id}")
+        raise HTTPException(status_code=404, detail="No claims found for this customer.")
+
+    claim_amounts = [claim.claim_amount for claim in claims if claim.claim_amount is not None]
+
+    print(f"Returning {len(claim_amounts)} claim amounts for customer_id {customer_id}")
+    return claim_amounts
+
+
 @router.get("/", responses={404: {"model": ErrorResponse}})
 def get_all_claims_endpoint(db: Session = Depends(get_db)):
     print("Received request to get all claims.")
