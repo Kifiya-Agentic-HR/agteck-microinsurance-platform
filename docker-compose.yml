@@ -355,6 +355,8 @@ services:
       DATABASE_URL: postgresql://claim_user:claim_password@claim_db:5432/claim_db
       POLICY_SERVICE_URL: http://policy_service:8000
       CONFIG_SERVICE_URL: http://config_service:8000
+    volumes:
+    - ./services/claim_management:/app
     networks:
       - app_network
 
