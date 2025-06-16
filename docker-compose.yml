@@ -191,6 +191,8 @@ services:
       PRODUCT_SERVICE_URL: http://product_service:8000
       DFS_SERVICE_URL: http://dfs_service:8000
       DATABASE_URL: postgresql://${POLICY_DB_USER}:${POLICY_DB_PASS}@policy_db:5432/${POLICY_DB_NAME}
+    volumes:
+    - ./services/policy:/app
     networks:
       - app_network
 
