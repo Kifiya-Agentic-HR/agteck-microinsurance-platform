@@ -158,9 +158,9 @@ services:
     networks:
       - app_network
 
-  redis:
+  redisdb:
    image: redis:7
-   container_name: redis
+   container_name: redisdb
    ports:
       - "6379:6379"
    networks:
@@ -177,12 +177,12 @@ services:
     depends_on:
       policy_db:
         condition: service_started
-      redis:
+      redisdb:
         condition: service_started
     ports:
       - "8050:8000"
     environment:
-      REDIS_HOST: redis
+      REDIS_HOST: redisdb
       DB_HOST: policy_db
       DB_PORT: 5432
       DB_USER: ${POLICY_DB_USER}
