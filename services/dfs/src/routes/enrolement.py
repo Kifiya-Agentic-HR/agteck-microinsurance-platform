@@ -36,8 +36,8 @@ def create_enrolement(
     try:
         # 1) Validate coordinates
         if enrolement.lattitude is None or enrolement.longitude is None:
-            logger.error("Latitude or longitude is missing.")
-            raise HTTPException(status_code=400, detail="Latitude or longitude is required.")
+            logger.error("Lattitude or longitude is missing.")
+            raise HTTPException(status_code=400, detail="Lattitude or longitude is required.")
 
         logger.info(f"Validated coordinates: lat={enrolement.lattitude}, lon={enrolement.longitude}")
 

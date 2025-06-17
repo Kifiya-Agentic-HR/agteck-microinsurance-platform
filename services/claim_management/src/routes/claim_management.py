@@ -71,6 +71,7 @@ async def process_all_claims_task(db_session_factory, background_tasks_parent: B
                 
                 claim_data = {
                     "policy_id": current_policy_id,
+                    "company_id": policy.get('company_id'),  # Ensure company_id is included
                     "customer_id": policy['customer_id'],
                     "grid_id": policy.get('grid') or policy['cps_zone'], 
                     "claim_type": ctype,
@@ -148,6 +149,7 @@ class ClaimDetailForCustomerOutputSchema(BaseModel):
     # Explicitly list fields for the output, EXCLUDING cps_zone
     id: int
     policy_id: int
+    company_id: int | None = None # Assuming these might be on the DB object
     grid_id: str | None = None
     claim_type: str
     status: str
@@ -338,7 +340,7 @@ async def create_crop_claim(
     try:
         print("Fetching policy details for crop claims.")
         policy_details = await fetch_policy_details()
-        print(f"Fetched {len(policy_details)} policy details:\\n{json.dumps(policy_details, indent=4)}")
+        print(f"Fetched {len(policy_details)} policy details:\n{json.dumps(policy_details, indent=4)}")
     except HTTPException as e:
         print(f"Failed to fetch policy details in create_crop_claim: {e.detail}")
         raise # Re-raise the exception to be handled by FastAPI
@@ -355,6 +357,7 @@ async def create_crop_claim(
         db.begin_nested() # Use a nested transaction for individual claim creation
         try:
             claim_data = {
+                "company_id": policy['company_id'], # Ensure company_id is included
                 "policy_id": policy['policy_id'],
                 "customer_id": policy['customer_id'],
                 "grid_id": policy.get('grid') or policy['cps_zone'], # Use 'grid' if available, else 'cps_zone'
@@ -413,6 +416,7 @@ async def create_livestock_claim(
         db.begin_nested()
         try:
             claim_data = {
+                "company_id": policy['company_id'], # Ensure company_id is included
                 "policy_id": policy['policy_id'],
                 "customer_id": policy['customer_id'],
                 "grid_id": policy.get('grid') or policy['cps_zone'], # Use 'grid' if available, else 'cps_zone'
@@ -486,52 +490,43 @@ async def get_claims_grouped_by_customer(db: Session = Depends(get_db)):
     customer_aggregated_claims = {}
     print("Starting aggregation of claims by customer.")
     for claim_db_obj_index, claim_db_obj in enumerate(all_claims_db):
-            print(f"Processing claim {claim_db_obj_index + 1}/{len(all_claims_db)}: ID {claim_db_obj.id}")
-            # Ensure customer_id is present, otherwise skip (or handle as per requirements)
-            if claim_db_obj.customer_id is None:
-                logger.warning(f"Claim ID {claim_db_obj.id} has no customer_id, skipping for aggregation.")
-                continue
-            
-            customer_id = claim_db_obj.customer_id
-            policy_id = claim_db_obj.policy_id
-            
-            period = None
-            policy_data = policy_info_map.get(policy_id)
-            if policy_data:
-                period = policy_data.get('period')
-                print(f"Found period {period} for policy_id {policy_id} (Claim ID {claim_db_obj.id}).")
-            else:
-                logger.warning(f"Policy details not found for policy_id {policy_id} related to claim_id {claim_db_obj.id}.")
+        print(f"Processing claim {claim_db_obj_index + 1}/{len(all_claims_db)}: ID {claim_db_obj.id}")
+        if claim_db_obj.customer_id is None:
+            logger.warning(f"Claim ID {claim_db_obj.id} has no customer_id, skipping for aggregation.")
+            continue
+        
+        customer_id = claim_db_obj.customer_id
+        policy_id = claim_db_obj.policy_id
+        
+        # Always use the period from the claim record itself
+        period = getattr(claim_db_obj, 'period', None)
 
-            # Prepare data for ClaimDetailForCustomerOutputSchema
-            data_for_output_schema = {
-                "id": claim_db_obj.id,
-                "policy_id": claim_db_obj.policy_id,
-                "grid_id": str(getattr(claim_db_obj, 'grid_id', None)),
-                "claim_type": getattr(claim_db_obj, 'claim_type', None),
-                "status": getattr(claim_db_obj, 'status', None),
-                "claim_amount": getattr(claim_db_obj, 'claim_amount', None),
-                "created_at": getattr(claim_db_obj, 'created_at', None),
-                "updated_at": getattr(claim_db_obj, 'updated_at', None),
-                "period": period
-            }
-            
-            try:
-                # Create an instance of the specific output schema
-                # This validates that all required fields in ClaimDetailForCustomerOutputSchema are present
-                # and have the correct types. cps_zone is not in this schema.
-                print(f"Attempting to create ClaimDetailForCustomerOutputSchema for claim ID {claim_db_obj.id} with data: {data_for_output_schema}")
-                claim_output_item = ClaimDetailForCustomerOutputSchema(**data_for_output_schema)
-                print(f"Successfully created ClaimDetailForCustomerOutputSchema for claim ID {claim_db_obj.id}")
-            except Exception as e: # Ideally, catch pydantic.ValidationError
-                logger.exception(f"Error creating ClaimDetailForCustomerOutputSchema for claim ID {claim_db_obj.id}: {e}. Data: {data_for_output_schema}", exc_info=True)
-                continue # Skip this claim
+        data_for_output_schema = {
+            "id": claim_db_obj.id,
+            "company_id": claim_db_obj.company_id,
+            "policy_id": claim_db_obj.policy_id,
+            "grid_id": str(getattr(claim_db_obj, 'grid_id', None)),
+            "claim_type": getattr(claim_db_obj, 'claim_type', None),
+            "status": getattr(claim_db_obj, 'status', None),
+            "claim_amount": getattr(claim_db_obj, 'claim_amount', None),
+            "created_at": getattr(claim_db_obj, 'created_at', None),
+            "updated_at": getattr(claim_db_obj, 'updated_at', None),
+            "period": period
+        }
+        
+        try:
+            print(f"Attempting to create ClaimDetailForCustomerOutputSchema for claim ID {claim_db_obj.id} with data: {data_for_output_schema}")
+            claim_output_item = ClaimDetailForCustomerOutputSchema(**data_for_output_schema)
+            print(f"Successfully created ClaimDetailForCustomerOutputSchema for claim ID {claim_db_obj.id}")
+        except Exception as e:
+            logger.exception(f"Error creating ClaimDetailForCustomerOutputSchema for claim ID {claim_db_obj.id}: {e}. Data: {data_for_output_schema}", exc_info=True)
+            continue
 
-            if customer_id not in customer_aggregated_claims:
-                customer_aggregated_claims[customer_id] = []
-                print(f"Initialized claims list for new customer_id: {customer_id}")
-            customer_aggregated_claims[customer_id].append(claim_output_item) # Append the validated schema instance
-            print(f"Appended claim ID {claim_db_obj.id} to customer_id {customer_id}. Current claim count for customer: {len(customer_aggregated_claims[customer_id])}")
+        if customer_id not in customer_aggregated_claims:
+            customer_aggregated_claims[customer_id] = []
+            print(f"Initialized claims list for new customer_id: {customer_id}")
+        customer_aggregated_claims[customer_id].append(claim_output_item)
+        print(f"Appended claim ID {claim_db_obj.id} to customer_id {customer_id}. Current claim count for customer: {len(customer_aggregated_claims[customer_id])}")
 
     if not customer_aggregated_claims:
         # If no *active* claims are found matching the criteria, return an empty list.
@@ -576,3 +571,65 @@ def authorize_claim_endpoint(claim_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Claim not found")
     print(f"Claim with ID {claim_id} authorized successfully.")
     return claim
+
+@router.get("/claims/by-customer/{company_id}", response_model=List[CustomerClaimsSummarySchema], tags=["claims"])
+async def get_claims_grouped_by_customer_and_company(
+    company_id: int,
+    db: Session = Depends(get_db)
+):
+    print(f"Received request to get claims grouped by customer for company_id {company_id}.")
+    all_claims_db = get_all_claims(db)
+    if not all_claims_db:
+        print("No claims found in the system.")
+        raise HTTPException(status_code=404, detail="No claims found in the system.")
+
+    # Filter claims by company_id
+    filtered_claims = [claim for claim in all_claims_db if claim.company_id == company_id]
+    print(f"Filtered down to {len(filtered_claims)} claims for company_id {company_id}.")
+
+    if not filtered_claims:
+        raise HTTPException(status_code=404, detail="No claims found for the specified company.")
+
+    try:
+        policy_details_list = await fetch_policy_details()
+    except HTTPException as e:
+        raise HTTPException(status_code=503, detail=f"Policy service unavailable: {e.detail}")
+    except Exception as e:
+        logger.exception("Failed to fetch policy details", exc_info=True)
+        raise HTTPException(status_code=503, detail="Could not retrieve policy details.")
+
+    policy_info_map = {policy['policy_id']: policy for policy in policy_details_list}
+    customer_aggregated_claims = {}
+
+    for claim_db_obj in filtered_claims:
+        if claim_db_obj.customer_id is None:
+            continue
+
+        customer_id = claim_db_obj.customer_id
+        policy_id = claim_db_obj.policy_id
+        # Always use the period from the claim record itself
+        period = getattr(claim_db_obj, 'period', None)
+
+        claim_output_item = ClaimDetailForCustomerOutputSchema(
+            id=claim_db_obj.id,
+            company_id=claim_db_obj.company_id,
+            policy_id=policy_id,
+            grid_id=str(getattr(claim_db_obj, 'grid_id', None)),
+            claim_type=claim_db_obj.claim_type,
+            status=claim_db_obj.status,
+            claim_amount=claim_db_obj.claim_amount,
+            # created_at=claim_db_obj.created_at,
+            # updated_at=claim_db_obj.updated_at,
+            period=period
+        )
+
+        if customer_id not in customer_aggregated_claims:
+            customer_aggregated_claims[customer_id] = []
+        customer_aggregated_claims[customer_id].append(claim_output_item)
+
+    result = [
+        CustomerClaimsSummarySchema(customer_id=cust_id, claims=claims_list)
+        for cust_id, claims_list in customer_aggregated_claims.items()
+    ]
+    print(f"Returning claims grouped for {len(result)} customers under company_id {company_id}.")
+    return result
