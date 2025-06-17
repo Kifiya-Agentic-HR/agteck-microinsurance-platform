@@ -247,11 +247,11 @@ async def process_claim(claim_id: int, claim_type: str, policy_data: dict):
             if period not in seasons:
                 logger.info(
                     f"Period {period} not in growing season {seasons} for claim {claim_id} "
-                    f"(grid={grid}) → settling with 0."
+                    f"(grid={grid}) → skipping claim processing."
                 )
-                update_claim_amount(db, claim_id, 0.0)
-                update_claim_status(db, claim_id, ClaimStatusEnum.SETTLED.value)
-                return
+                # update_claim_amount(db, claim_id, 0.0)
+                # update_claim_status(db, claim_id, ClaimStatusEnum.SETTLED.value)
+                return  
 
             # 3b) Fetch NDVI now that we know the period is valid
             try:

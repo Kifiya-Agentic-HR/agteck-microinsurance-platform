@@ -56,15 +56,17 @@ export default function ClaimsPage() {
   }, []);
 
   const exportRows = data.flatMap(group =>
-    group.claims.map(c => ({
-      customerId: group.customer_id,
-      policyId: c.policy_id,
-      claimType: c.claim_type,
-      claimAmount: c.claim_amount,
-      status: c.status,
-      gridId: c.grid_id,
-      period: c.period,
-    }))
+  Array.isArray(group.claims)
+    ? group.claims.map(c => ({
+        customerId: group.customer_id,
+        policyId: c.policy_id,
+        claimType: c.claim_type,
+        claimAmount: c.claim_amount,
+        status: c.status,
+        gridId: c.grid_id,
+        period: c.period,
+      }))
+    : []
   );
 
   const csvHeaders = [
@@ -119,7 +121,7 @@ export default function ClaimsPage() {
 
   if (error) return <div className="text-red-600">{error}</div>;
 
-  if (data.length === 0 || data[0].claims.length === 0) {
+  if (data.length === 0 || !Array.isArray(data[0].claims) || data[0].claims.length === 0) {
     return (
       <div className="flex min-h-screen bg-[#f9f8f3] text-[#2c423f]">
         <Sidebar />
