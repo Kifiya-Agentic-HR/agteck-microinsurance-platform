@@ -19,6 +19,7 @@ jobs:
       policy: ${{ steps.paths.outputs.policy }}
     steps:
       - uses: actions/checkout@v3
+
       - name: "Filter paths"
         id: paths
         uses: dorny/paths-filter@v2
@@ -68,8 +69,7 @@ jobs:
             changed: ${{ needs.filter.outputs.notification }}
             service: notification_service
             args: "pytest services/notification"
-    # only run matrix entries where the path-filter flagged changes
-    if: ${{ matrix.changed == 'true' }}
+
     steps:
       - uses: actions/checkout@v3
 
@@ -79,5 +79,6 @@ jobs:
           sudo apt-get install -y docker-compose-plugin
 
       - name: Run ${{ matrix.name }} tests
+        if: ${{ matrix.changed == 'true' }}
         run: |
           docker compose run --rm ${{ matrix.service }} ${{ matrix.args }}
