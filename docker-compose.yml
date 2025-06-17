@@ -333,7 +333,8 @@ services:
       POSTGRES_USER: claim_user  
       POSTGRES_PASSWORD: claim_password  
       POSTGRES_DB: claim_db  
-     
+    volumes:
+      - pgdata_claim:/var/lib/postgresql/data     
     healthcheck:  # Add healthcheck
       test: ["CMD-SHELL", "pg_isready -U claim_user -d claim_db"]
       interval: 5s
@@ -455,7 +456,6 @@ services:
       - app_network
 
 volumes:
-  claim_pgdata:
   pgdata_company:
   pgdata_product:
   pgdata_users:
