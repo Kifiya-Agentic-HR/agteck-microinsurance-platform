@@ -191,6 +191,8 @@ services:
       PRODUCT_SERVICE_URL: http://product_service:8000
       DFS_SERVICE_URL: http://dfs_service:8000
       DATABASE_URL: postgresql://${POLICY_DB_USER}:${POLICY_DB_PASS}@policy_db:5432/${POLICY_DB_NAME}
+    volumes:
+    - ./services/policy:/app
     networks:
       - app_network
 
@@ -346,6 +348,8 @@ services:
     container_name: claim_service
     env_file:
       - .env
+    ports:
+      - "8040:8000"
     depends_on:
       claim_db:
         condition: service_healthy  # Add healthcheck dependency
@@ -353,6 +357,8 @@ services:
       DATABASE_URL: postgresql://claim_user:claim_password@claim_db:5432/claim_db
       POLICY_SERVICE_URL: http://policy_service:8000
       CONFIG_SERVICE_URL: http://config_service:8000
+    volumes:
+    - ./services/claim_management:/app
     networks:
       - app_network
 
