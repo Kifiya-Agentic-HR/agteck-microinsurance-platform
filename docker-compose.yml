@@ -161,8 +161,8 @@ services:
   redisdb:
    image: redis:7
    container_name: redisdb
-   ports:
-      - "6379:6379"
+   # ports:
+   #    - "6379:6379"
    networks:
       - app_network
 
