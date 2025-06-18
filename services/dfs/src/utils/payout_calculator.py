@@ -11,7 +11,7 @@ async def fetch_and_update_payout_rate(customer_id: int, db: Session) -> float:
         response = await httpx.get(url)
         response.raise_for_status()
         claim_amounts = response.json()
-        if not claim_amounts:
+        if not claim_amounts or len(claim_amounts) == 0:
             return 0.0
 
         payout = sum(claim_amounts) / len(claim_amounts)

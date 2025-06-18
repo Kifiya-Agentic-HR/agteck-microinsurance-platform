@@ -266,6 +266,8 @@ services:
     depends_on:
       dfs_db:
         condition: service_started
+    ports:
+      - "8030:8000"
     environment:
       POLICY_SERVICE_URL: http://policy_service:8000
       DATABASE_URL: postgresql://${DFS_DB_USER}:${DFS_DB_PASS}@dfs_db:5432/${DFS_DB_NAME}
