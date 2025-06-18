@@ -1,28 +1,40 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+import asyncio
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.database.crud.enrolement_crud import EnrolementService
 from src.database.crud.customer_crud import CustomerService
 from src.schemas.enrolement_schema import EnrolementRequest, EnrolementResponse, CustomerResponse
-from src.database.db import get_db
 from src.schemas.customer_schema import CustomerRequest
+from src.database.db import get_db
 from src.core.config import settings
 from src.utils.grid_and_zone_getter import GridAndZoneGetter
-import httpx
-from src.database.models.customer import Customer
 from src.utils.payout_calculator import fetch_and_update_payout_rate
-import asyncio
+from src.database.models.customer import Customer
 
 POLICY_SERVICE_URL = settings.POLICY_SERVICE_URL + '/api'
 
-# Initialize GridAndZoneGetter
+router = APIRouter()
 grid_zone_getter = GridAndZoneGetter()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+
+async def build_customer_response(db_customer: Customer, db: Session) -> CustomerResponse:
+    payout_rate = await fetch_and_update_payout_rate(db_customer.customer_id, db)
+    return CustomerResponse(
+        customer_id=db_customer.customer_id,
+        f_name=db_customer.f_name,
+        m_name=db_customer.m_name,
+        l_name=db_customer.l_name,
+        account_no=db_customer.account_no,
+        account_type=db_customer.account_type,
+        payout_rate=payout_rate,
+    )
+
 
 @router.post("/", response_model=EnrolementResponse, status_code=201)
 def create_enrolement(
@@ -92,20 +104,26 @@ def create_enrolement(
         raise HTTPException(status_code=500, detail="Enrollment creation failed")
 
     # 5) Prepare customer response
-    cust_dict = CustomerResponse(
+    db_customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
+    payout_rate = asyncio.run(fetch_and_update_payout_rate(db_customer.customer_id, db))
+
+    customer_response = CustomerResponse(
         customer_id=customer_id,
         f_name=enrolement.f_name,
         m_name=enrolement.m_name,
         l_name=enrolement.l_name,
         account_no=enrolement.account_no,
-        account_type=enrolement.account_type, # Default to 0.0 if not provided
+        account_type=enrolement.account_type,
+        payout_rate=payout_rate,
     ).dict()
 
     # 6) Return enrollment response
+    logger.info(f"Final enrollment response for customer_id {customer_id}")
+
     response = EnrolementResponse(
         enrolement_id=enroll_id,
         customer_id=customer_id,
-        customer=cust_dict,
+        customer=customer_response,
         createdAt=created_at,
         user_id=enrolement.user_id,
         status="pending",
@@ -135,22 +153,12 @@ def read_enrolement(enrollment_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Enrollment not found")
 
     db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
+    customer = asyncio.run(build_customer_response(db_customer, db))
 
-    # fetch payout rate
-    payout_rate = asyncio.run(fetch_and_update_payout_rate(db_customer.customer_id, db))
-
-    result = EnrolementResponse(
+    EnrolementResponse(
         enrolement_id=db_enr.enrolment_id,
         customer_id=db_enr.customer_id,
-        customer=CustomerResponse(
-            customer_id=db_customer.customer_id,
-            f_name=db_customer.f_name,
-            m_name=db_customer.m_name,
-            l_name=db_customer.l_name,
-            account_no=db_customer.account_no,
-            account_type=db_customer.account_type,
-            payout_rate=payout_rate,
-        ),
+        customer=customer,
         createdAt=db_enr.createdAt,
         user_id=db_enr.user_id,
         status=db_enr.status,
@@ -166,8 +174,8 @@ def read_enrolement(enrollment_id: int, db: Session = Depends(get_db)):
         grid=db_enr.grid,
         lattitude=db_enr.lattitude,
         longitude=db_enr.longitude,
-    )
-    return result
+        payout_rate=customer.payout_rate
+        )
 
 
 @router.get("/by-company/{company_id}", response_model=list[EnrolementResponse])
@@ -180,17 +188,11 @@ def get_enrollments_by_company_id(
     result = []
     for db_enr in enrollments:
         db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
+        customer = asyncio.run(build_customer_response(db_customer, db))
         enrol = EnrolementResponse(
             enrolement_id=db_enr.enrolment_id,
             customer_id=db_enr.customer_id,
-            customer=CustomerResponse(
-                customer_id=db_customer.customer_id,
-                f_name=db_customer.f_name,
-                m_name=db_customer.m_name,
-                l_name=db_customer.l_name,
-                account_no=db_customer.account_no,
-                account_type=db_customer.account_type,
-            ),
+            customer=customer,
             createdAt=db_enr.createdAt,
             user_id=db_enr.user_id,
             status=db_enr.status,
@@ -206,6 +208,7 @@ def get_enrollments_by_company_id(
             grid=db_enr.grid,
             lattitude=db_enr.lattitude,
             longitude=db_enr.longitude,
+            payout_rate=customer.payout_rate
         )
         result.append(enrol)
     return result
@@ -220,17 +223,11 @@ def get_enrollments_by_user_id(
     result = []
     for db_enr in enrollments:
         db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
+        customer = asyncio.run(build_customer_response(db_customer, db))
         enrol = EnrolementResponse(
             enrolement_id=db_enr.enrolment_id,
             customer_id=db_enr.customer_id,
-            customer=CustomerResponse(
-                customer_id=db_customer.customer_id,
-                f_name=db_customer.f_name,
-                m_name=db_customer.m_name,
-                l_name=db_customer.l_name,
-                account_no=db_customer.account_no,
-                account_type=db_customer.account_type,
-            ),
+            customer=customer,
             createdAt=db_enr.createdAt,
             user_id=db_enr.user_id,
             status=db_enr.status,
@@ -246,6 +243,7 @@ def get_enrollments_by_user_id(
             grid=db_enr.grid,
             lattitude=db_enr.lattitude,
             longitude=db_enr.longitude,
+            payout_rate=customer.payout_rate
         )
         result.append(enrol)
     return result
@@ -255,21 +253,15 @@ def list_enrolements(
     db: Session = Depends(get_db)
 ):
     service = EnrolementService(db)
-    enrollments =  service.get_enrolements()
+    enrollments = service.get_enrolements()
     result = []
     for db_enr in enrollments:
         db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
+        customer = asyncio.run(build_customer_response(db_customer, db))
         enrol = EnrolementResponse(
             enrolement_id=db_enr.enrolment_id,
             customer_id=db_enr.customer_id,
-            customer=CustomerResponse(
-                customer_id=db_customer.customer_id,
-                f_name=db_customer.f_name,
-                m_name=db_customer.m_name,
-                l_name=db_customer.l_name,
-                account_no=db_customer.account_no,
-                account_type=db_customer.account_type,
-            ),
+            customer=customer,
             createdAt=db_enr.createdAt,
             user_id=db_enr.user_id,
             status=db_enr.status,
@@ -285,6 +277,7 @@ def list_enrolements(
             grid=db_enr.grid,
             lattitude=db_enr.lattitude,
             longitude=db_enr.longitude,
+            payout_rate=customer.payout_rate
         )
         result.append(enrol)
     return result
