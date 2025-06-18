@@ -59,7 +59,7 @@ export default function EnrollmentList() {
     doc.text(`Status: ${enrollment.status}`, 10, 40);
     doc.text(`Sum Insured: ${enrollment.sum_insured}`, 10, 50);
     doc.text(`Premium: ${enrollment.premium}`, 10, 60);
-    doc.text(`Payout Rate: ${enrollment.customer.payout_rate}%`, 10, 70); // Added line
+    doc.text(`Payout Rate: ${enrollment.customer.payout_rate}`, 10, 70); // Added line
     doc.text(`Coverage Period: ${enrollment.date_from} to ${enrollment.date_to}`, 10, 80);
     doc.text(`Zone: ${enrollment.cps_zone}`, 10, 90);
     doc.text(`Location: (${enrollment.lattitude}, ${enrollment.longtiude})`, 10, 100);
@@ -148,7 +148,7 @@ export default function EnrollmentList() {
                         <div className="text-xs text-[#7a938f]">{formatCurrency(e.sum_insured)} insured</div>
                       </td>
                       <td className="px-6 py-4 text-sm text-[#3a584e]">
-                        {e.customer.payout_rate != null ? `${e.customer.payout_rate}%` : 'N/A'}
+                        {e.customer.payout_rate != null ? `${e.customer.payout_rate}` : 'N/A'}
                       </td>
                       <td className="px-6 py-4">
                         <span className="px-2.5 py-1 text-xs font-medium bg-[#eef4e5] text-[#3a584e] rounded-full">Active</span>
