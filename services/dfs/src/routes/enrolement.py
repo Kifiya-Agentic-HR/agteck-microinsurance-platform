@@ -10,6 +10,8 @@ from src.core.config import settings
 from src.utils.grid_and_zone_getter import GridAndZoneGetter
 import httpx
 from src.database.models.customer import Customer
+from src.utils.payout_calculator import fetch_and_update_payout_rate
+import asyncio
 
 POLICY_SERVICE_URL = settings.POLICY_SERVICE_URL + '/api'
 
@@ -96,7 +98,7 @@ def create_enrolement(
         m_name=enrolement.m_name,
         l_name=enrolement.l_name,
         account_no=enrolement.account_no,
-        account_type=enrolement.account_type,
+        account_type=enrolement.account_type, # Default to 0.0 if not provided
     ).dict()
 
     # 6) Return enrollment response
@@ -126,15 +128,17 @@ def create_enrolement(
 
 
 @router.get("/{enrollment_id}", response_model=EnrolementResponse)
-def read_enrolement(
-    enrollment_id: int,
-    db: Session = Depends(get_db)
-):
+def read_enrolement(enrollment_id: int, db: Session = Depends(get_db)):
     service = EnrolementService(db)
     db_enr = service.get_enrolement(enrollment_id)
     if not db_enr:
         raise HTTPException(status_code=404, detail="Enrollment not found")
+
     db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
+
+    # fetch payout rate
+    payout_rate = asyncio.run(fetch_and_update_payout_rate(db_customer.customer_id, db))
+
     result = EnrolementResponse(
         enrolement_id=db_enr.enrolment_id,
         customer_id=db_enr.customer_id,
@@ -145,6 +149,7 @@ def read_enrolement(
             l_name=db_customer.l_name,
             account_no=db_customer.account_no,
             account_type=db_customer.account_type,
+            payout_rate=payout_rate,
         ),
         createdAt=db_enr.createdAt,
         user_id=db_enr.user_id,

@@ -1,8 +1,6 @@
-from sqlalchemy import Column, Integer, String,DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, Float, String,DateTime, Enum as SQLEnum
 from sqlalchemy.sql import func
 from src.database.db import Base
-
-
 
 
 class Customer(Base):
@@ -15,3 +13,4 @@ class Customer(Base):
     account_no = Column(String, nullable=False,)
     account_type = Column(String, nullable=False)
     createdAt = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    payout_rate = Column(Float, nullable=False,server_default="0")

@@ -271,12 +271,15 @@ services:
       DATABASE_URL: postgresql://${DFS_DB_USER}:${DFS_DB_PASS}@dfs_db:5432/${DFS_DB_NAME}
     networks:
       - app_network
+    volumes:
+      - ./services/dfs/src:/app/src  
 
   dfs_db:
     image: postgres:16
     container_name: dfs_db
     env_file:
       - .env
+  # Expose the DFS DB on a different port
     environment:
       POSTGRES_USER: ${DFS_DB_USER}
       POSTGRES_PASSWORD: ${DFS_DB_PASS}

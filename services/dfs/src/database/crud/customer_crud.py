@@ -28,6 +28,7 @@ class CustomerService:
             l_name=customer.l_name,
             account_no=customer.account_no,
             account_type=customer.account_type,
+            payout_rate=0.0  
         )
         self.db.add(db_customer)
         self.db.commit()
