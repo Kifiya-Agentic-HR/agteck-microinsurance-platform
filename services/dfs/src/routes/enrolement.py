@@ -146,16 +146,16 @@ def create_enrolement(
 
 
 @router.get("/{enrollment_id}", response_model=EnrolementResponse)
-def read_enrolement(enrollment_id: int, db: Session = Depends(get_db)):
+async def read_enrolement(enrollment_id: int, db: Session = Depends(get_db)):
     service = EnrolementService(db)
     db_enr = service.get_enrolement(enrollment_id)
     if not db_enr:
         raise HTTPException(status_code=404, detail="Enrollment not found")
 
     db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
-    customer = asyncio.run(build_customer_response(db_customer, db))
+    customer = await build_customer_response(db_customer, db)
 
-    EnrolementResponse(
+    return EnrolementResponse(
         enrolement_id=db_enr.enrolment_id,
         customer_id=db_enr.customer_id,
         customer=customer,
@@ -283,32 +283,38 @@ def list_enrolements(
     return result
 
 @router.put("/{enrollment_id}/approve")
-def approve_enrolement(
+async def approve_enrolement(
     enrollment_id: int,
     db: Session = Depends(get_db)
 ):
     service = EnrolementService(db)
+    
     try:
         result = service.approve_enrolement(enrollment_id)
     except HTTPException as e:
         raise e
 
-    if result:
-        url = f"{POLICY_SERVICE_URL}/policy"
-        payload = {
-            "enrollment_id": enrollment_id,
-        }
-        try:
-            response = httpx.post(url, json=payload)
+    if not result:
+        raise HTTPException(status_code=400, detail="Enrollment approval failed")
+
+    url = f"{POLICY_SERVICE_URL}/policy"
+    payload = {"enrollment_id": enrollment_id}
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(url, json=payload)
             response.raise_for_status()
-            return {
-                "sucess": True,
-                "message": f"Enrollment for {enrollment_id} approved and policy created successfully",
-            }
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=500, detail=f"Policy service request failed: {e}")
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(status_code=response.status_code, detail=f"Policy service error: {e}")
+        return {
+            "success": True,
+            "message": f"Enrollment for {enrollment_id} approved and policy created successfully",
+            "data": result  # Ensure result is serializable
+        }
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Policy service request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=response.status_code, detail=f"Policy service error: {e}")
+
+
 
 @router.put("/{enrollment_id}/reject")
 def reject_enrolement(
