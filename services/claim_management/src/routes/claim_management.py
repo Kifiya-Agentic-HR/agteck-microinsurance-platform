@@ -27,122 +27,92 @@ def get_db():
 router = APIRouter()
 
 async def process_all_claims_task(db_session_factory, background_tasks_parent: BackgroundTasks):
-    """
-    Processes claims for all policies and customers in the background.
-    Manages its own database session.
-    """
     print("Starting process_all_claims_task")
     db: Session = db_session_factory()
     try:
-        print("Starting background task: process_all_claims_task")
+        print("Fetching policy details in process_all_claims_task")
+        policies = await fetch_policy_details()
+    except HTTPException as e:
+        print(f"Could not fetch policy details: {e.detail}")
+        return
+
+    if not policies:
+        print("No policies found to process in background task.")
+        return
+
+    print(f"Found {len(policies)} policies to process.")
+    for policy_index, policy in enumerate(policies):
         try:
-            print("Fetching policy details in process_all_claims_task")
-            policies = await fetch_policy_details()
-            # print(f"Fetched {len(policies) if policies else 0} policy details:\\n{json.dumps(policies, indent=4)}")
-        except HTTPException as e:
-            print(f"Could not fetch policy details: {e.detail}")
-            return
-        if not policies:
-            print("No policies found to process in background task.")
-            return
+            print(f"Processing policy {policy_index + 1}/{len(policies)}: {policy.get('policy_id')}")
+            required_keys = ['policy_id', 'customer_id', 'cps_zone', 'period', 'product_type', 'period_sum_insured']
+            if not all(policy.get(k) is not None for k in required_keys):
+                print(f"Skipping policy due to missing essential details: Policy Data {policy}")
+                continue
 
-        print(f"Found {len(policies)} policies to process.")
+            current_policy_id = policy['policy_id']
+            current_period = policy['period']
+            ctype = ClaimTypeEnum.CROP.value if policy.get('product_type') == 1 else ClaimTypeEnum.LIVESTOCK.value
 
-        for policy_index, policy in enumerate(policies):
-            claim_id_for_logging = "N/A"
-            try:
-                print(f"Processing policy {policy_index + 1}/{len(policies)}: {policy.get('policy_id')}")
-                
-                required_keys = ['policy_id', 'customer_id', 'cps_zone', 'period', 'product_type', 'period_sum_insured']
-                if not all(policy.get(k) is not None for k in required_keys):
-                    print(f"Skipping policy due to missing essential details: Policy Data {policy}")
-                    continue
-
-                current_policy_id = policy['policy_id']
-                current_period = policy['period']
-                ctype = ClaimTypeEnum.CROP.value if policy.get('product_type') == 1 else ClaimTypeEnum.LIVESTOCK.value
-
-                # Check if a claim for this policy_id and period already exists
-                print(f"Checking for existing claim for policy_id {current_policy_id} and period {current_period}")
-                existing_claim = db.query(Claim).filter(
-                    Claim.policy_id == current_policy_id,
-                    Claim.period == current_period 
-                ).first()
-                
-                claim_data = {
-                    "policy_id": current_policy_id,
-                    "company_id": policy.get('company_id'),  # Ensure company_id is included
-                    "customer_id": policy['customer_id'],
-                    "grid_id": policy.get('grid') or policy['cps_zone'], 
-                    "claim_type": ctype,
-                    "status": ClaimStatusEnum.PROCESSING.value,
-                    "period": current_period  # Added period to claim_data
-                }
-                print(f"Creating claim with data: {claim_data}")
-                if existing_claim:
-                    print(f"Claim already exists for policy_id {current_policy_id} and period {current_period} (Claim ID: {existing_claim.id}). Skipping creation.")
-                    created_claim = existing_claim
-                else:
-                    created_claim = create_claim(db, claim_data)
-                # Assuming create_claim commits and refreshes, so created_claim.id is an int.
-                # If type errors persist here, it's a static analysis issue with model/CRUD typing.
-                
-                if not created_claim or not isinstance(created_claim.id, int):
-                    print(f"Failed to create claim or retrieve valid claim ID for policy: {policy.get('policy_id')}")
-                    continue
-                
-                claim_id_for_logging = created_claim.id # For logging in subsequent error blocks
-                print(f"Successfully created claim with ID: {claim_id_for_logging} for policy_id: {current_policy_id}")
-
-                cps = int(policy['cps_zone'])
-                period = int(policy['period'])
-                grid = int(policy['grid'])
-
+            if ctype == ClaimTypeEnum.CROP.value:
                 try:
-                    print(f"Fetching CPS config for CPS {cps}, period {period} for claim {claim_id_for_logging}")
-                    cfgj = await fetch_cps_config(int(cps), int(period))
-                    print(f"Fetched CPS config: {cfgj} for claim {claim_id_for_logging}")
-                except HTTPException as e:
-                    logger.warning(f"Config service error for CPS {cps}, period {period}: {e.detail}. Claim {claim_id_for_logging} will be settled with 0 amount.")
-                    update_claim_amount(db, created_claim.id, 0.0)
-                    update_claim_status(db, created_claim.id, ClaimStatusEnum.SETTLED.value)
-                    print(f"Claim {claim_id_for_logging} settled due to config service error.")
+                    seasons = await fetch_growing_season(policy.get("grid") or policy["cps_zone"])
+                    if current_period not in seasons:
+                        print(f"Skipping crop claim for policy {current_policy_id} — period {current_period} not in growing season {seasons}")
+                        continue
+                except Exception as e:
+                    print(f"Error checking growing season for policy {current_policy_id}: {e}")
                     continue
-                trig, exitp = cfgj.get('trigger_point', 0), cfgj.get('exit_point', 0)
 
-                if trig == 0 or exitp == 0:
-                    print(f"Trigger or exit point is 0 for claim {claim_id_for_logging} (trig: {trig}, exitp: {exitp}). Settling claim with 0 amount.")
-                    update_claim_amount(db, created_claim.id, 0.0)
-                    update_claim_status(db, created_claim.id, ClaimStatusEnum.SETTLED.value)
-                    print(f"Claim {claim_id_for_logging} settled.")
-                else:
-                    print(f"Adding process_claim task to background for claim ID: {created_claim.id}")
-                    background_tasks_parent.add_task(process_claim, created_claim.id, ctype, policy)
-            
-            except HTTPException as e:
-                print(f"Service error for policy {policy.get('policy_id', 'N/A')} (Claim ID: {claim_id_for_logging}): {e.detail}")
-                if isinstance(claim_id_for_logging, int):
-                    print(f"Attempting to settle claim {claim_id_for_logging} due to service error.")
-                    update_claim_amount(db, claim_id_for_logging, 0.0)
-                    update_claim_status(db, claim_id_for_logging, ClaimStatusEnum.SETTLED.value)
-                    print(f"Claim {claim_id_for_logging} settled due to service error.")
-            except Exception as e:
-                logger.exception(f"Unexpected error processing policy {policy.get('policy_id', 'N/A')} (Claim ID: {claim_id_for_logging}): {e}", exc_info=True)
-                if isinstance(claim_id_for_logging, int):
-                    print(f"Attempting to settle claim {claim_id_for_logging} due to unexpected error.")
-                    update_claim_amount(db, claim_id_for_logging, 0.0)
-                    update_claim_status(db, claim_id_for_logging, ClaimStatusEnum.SETTLED.value)
-                    print(f"Claim {claim_id_for_logging} settled due to unexpected error.")
-        
-        print("Finished background task: process_all_claims_task")
+            existing_claim = db.query(Claim).filter(
+                Claim.policy_id == current_policy_id,
+                Claim.period == current_period
+            ).first()
+
+            claim_data = {
+                "policy_id": current_policy_id,
+                "company_id": policy.get('company_id'),
+                "customer_id": policy['customer_id'],
+                "grid_id": policy.get('grid') or policy['cps_zone'],
+                "claim_type": ctype,
+                "status": ClaimStatusEnum.PROCESSING.value,
+                "period": current_period
+            }
+
+            if existing_claim:
+                print(f"Claim already exists for policy_id {current_policy_id} and period {current_period}. Skipping.")
+                created_claim = existing_claim
+            else:
+                created_claim = create_claim(db, claim_data)
+
+            if not created_claim or not isinstance(created_claim.id, int):
+                print(f"Failed to create claim for policy {current_policy_id}")
+                continue
+
+            # Ensure `period_sum_insured` is passed to process_claim
+            policy_for_task = dict(policy)  # Copy policy dict to avoid side-effects
+            if "period_sum_insured" not in policy_for_task:
+                policy_for_task["period_sum_insured"] = policy.get("period_sum_insured", 0.0)
+
+            background_tasks_parent.add_task(
+                process_claim,
+                created_claim.id,
+                ctype,
+                policy_for_task
+            )
+        except Exception as e:
+            logger.exception(f"Error processing policy {policy.get('policy_id', 'N/A')}: {e}", exc_info=True)
+
+    db.close()
+    print("Finished background task: process_all_claims_task")
+
     
-    except Exception as e:
-        logger.exception(f"General error in process_all_claims_task: {e}", exc_info=True)
-    finally:
-        if db:
-            db.close()
-            print("Database session closed for process_all_claims_task.")
-    print("Exiting process_all_claims_task")
+    # except Exception as e:
+    #     logger.exception(f"General error in process_all_claims_task: {e}", exc_info=True)
+    # finally:
+    #     if db:
+    #         db.close()
+    #         print("Database session closed for process_all_claims_task.")
+    # print("Exiting process_all_claims_task")
 
 # Define the new output schema for individual claims within the customer aggregation
 class ClaimDetailForCustomerOutputSchema(BaseModel):
@@ -343,52 +313,62 @@ async def create_crop_claim(
         print(f"Fetched {len(policy_details)} policy details:\n{json.dumps(policy_details, indent=4)}")
     except HTTPException as e:
         print(f"Failed to fetch policy details in create_crop_claim: {e.detail}")
-        raise # Re-raise the exception to be handled by FastAPI
-        
+        raise
+
     crops = [p for p in policy_details if p['product_type'] == 1 and p['period'] == period]
     if not crops:
         logger.warning(f"No valid crop policies found for period {period}.")
         raise HTTPException(400, "No valid crop policies found for the specified period")
-    
+
     print(f"Found {len(crops)} crop policies for period {period} to process.")
     processed_claims_count = 0
     for policy_index, policy in enumerate(crops):
         print(f"Processing crop policy {policy_index + 1}/{len(crops)}: {policy.get('policy_id')}")
-        db.begin_nested() # Use a nested transaction for individual claim creation
+        db.begin_nested()
         try:
+            try:
+                seasons = await fetch_growing_season(policy.get("grid") or policy["cps_zone"])
+                if period not in seasons:
+                    print(f"Skipping policy {policy['policy_id']} — period {period} not in growing season {seasons}")
+                    db.rollback()
+                    continue
+            except Exception as e:
+                print(f"Error checking growing season for policy {policy['policy_id']}: {e}")
+                db.rollback()
+                continue
+
             claim_data = {
-                "company_id": policy['company_id'], # Ensure company_id is included
+                "company_id": policy['company_id'],
                 "policy_id": policy['policy_id'],
                 "customer_id": policy['customer_id'],
-                "grid_id": policy.get('grid') or policy['cps_zone'], # Use 'grid' if available, else 'cps_zone'
+                "grid_id": policy.get('grid') or policy['cps_zone'],
                 "claim_type": ClaimTypeEnum.CROP.value,
                 "status": ClaimStatusEnum.PROCESSING.value,
-                "period": policy['period'] # Ensure period is included
+                "period": policy['period']
             }
             print(f"Creating crop claim with data: {claim_data}")
             claim_instance = create_claim(db, claim_data)
-            db.commit() # Commit the nested transaction to get the ID
+            db.commit()
             print(f"Successfully created crop claim with ID: {claim_instance.id if claim_instance else 'N/A'} for policy_id: {policy.get('policy_id')}")
-            
+
             if claim_instance and isinstance(claim_instance.id, int):
                 print(f"Adding process_claim task to background for crop claim ID: {claim_instance.id}")
                 background_tasks.add_task(
                     process_claim,
-                    claim_instance.id, # Pass the integer ID
+                    claim_instance.id,
                     ClaimTypeEnum.CROP.value,
                     policy
                 )
-                processed_claims_count +=1
+                processed_claims_count += 1
             else:
                 print(f"Failed to create claim or get valid ID for policy {policy.get('policy_id')}")
-                # Optionally, rollback the main transaction or handle error
         except Exception as e:
-            db.rollback() # Rollback nested transaction on error
+            db.rollback()
             print(f"Error creating claim for policy {policy.get('policy_id')}: {e}", exc_info=True)
-            # Decide if to continue with other policies or raise an error
 
     print(f"Crop claims processing initiated for {processed_claims_count} policies for period {period}.")
     return {"message": "Crop claims processing initiated for the specified period."}
+
 
 @router.post("/claims/livestock", response_model=dict)
 async def create_livestock_claim(
@@ -588,64 +568,43 @@ def authorize_claim_endpoint(claim_id: int, db: Session = Depends(get_db)):
     print(f"Claim with ID {claim_id} authorized successfully.")
     return claim
 
-@router.get("/claims/by-customer/{company_id}", response_model=List[CustomerClaimsSummarySchema], tags=["claims"])
-async def get_claims_grouped_by_customer_and_company(
+@router.get("/claims/by-company/{company_id}", response_model=List[ClaimDetailForCustomerOutputSchema], tags=["claims"])
+async def get_claims_by_company(
     company_id: int,
     db: Session = Depends(get_db)
 ):
-    print(f"Received request to get claims grouped by customer for company_id {company_id}.")
+    print(f"Received request to get claims for company_id {company_id}")
     all_claims_db = get_all_claims(db)
+    
     if not all_claims_db:
-        print("No claims found in the system.")
         raise HTTPException(status_code=404, detail="No claims found in the system.")
-
-    # Filter claims by company_id
+    
     filtered_claims = [claim for claim in all_claims_db if claim.company_id == company_id]
-    print(f"Filtered down to {len(filtered_claims)} claims for company_id {company_id}.")
+    print(f"Filtered {len(filtered_claims)} claims for company_id {company_id}")
 
     if not filtered_claims:
         raise HTTPException(status_code=404, detail="No claims found for the specified company.")
 
-    try:
-        policy_details_list = await fetch_policy_details()
-    except HTTPException as e:
-        raise HTTPException(status_code=503, detail=f"Policy service unavailable: {e.detail}")
-    except Exception as e:
-        logger.exception("Failed to fetch policy details", exc_info=True)
-        raise HTTPException(status_code=503, detail="Could not retrieve policy details.")
+    result = []
+    for claim in filtered_claims:
+        data_for_output = {
+            "id": claim.id,
+            "company_id": claim.company_id,
+            "policy_id": claim.policy_id,
+            "grid_id": str(getattr(claim, 'grid_id', None)),
+            "claim_type": getattr(claim, 'claim_type', None),
+            "status": getattr(claim, 'status', None),
+            "claim_amount": getattr(claim, 'claim_amount', None),
+            "created_at": getattr(claim, 'created_at', None),
+            "updated_at": getattr(claim, 'updated_at', None),
+            "period": getattr(claim, 'period', None)
+        }
 
-    policy_info_map = {policy['policy_id']: policy for policy in policy_details_list}
-    customer_aggregated_claims = {}
-
-    for claim_db_obj in filtered_claims:
-        if claim_db_obj.customer_id is None:
+        try:
+            claim_output = ClaimDetailForCustomerOutputSchema(**data_for_output)
+            result.append(claim_output)
+        except Exception as e:
+            logger.exception(f"Skipping claim ID {claim.id} due to validation error: {e}")
             continue
 
-        customer_id = claim_db_obj.customer_id
-        policy_id = claim_db_obj.policy_id
-        # Always use the period from the claim record itself
-        period = getattr(claim_db_obj, 'period', None)
-
-        claim_output_item = ClaimDetailForCustomerOutputSchema(
-            id=claim_db_obj.id,
-            company_id=claim_db_obj.company_id,
-            policy_id=policy_id,
-            grid_id=str(getattr(claim_db_obj, 'grid_id', None)),
-            claim_type=claim_db_obj.claim_type,
-            status=claim_db_obj.status,
-            claim_amount=claim_db_obj.claim_amount,
-            # created_at=claim_db_obj.created_at,
-            # updated_at=claim_db_obj.updated_at,
-            period=period
-        )
-
-        if customer_id not in customer_aggregated_claims:
-            customer_aggregated_claims[customer_id] = []
-        customer_aggregated_claims[customer_id].append(claim_output_item)
-
-    result = [
-        CustomerClaimsSummarySchema(customer_id=cust_id, claims=claims_list)
-        for cust_id, claims_list in customer_aggregated_claims.items()
-    ]
-    print(f"Returning claims grouped for {len(result)} customers under company_id {company_id}.")
     return result

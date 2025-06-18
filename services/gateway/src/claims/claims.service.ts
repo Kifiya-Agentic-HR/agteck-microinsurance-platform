@@ -101,7 +101,7 @@ export class ClaimsService {
 async getByCustomerByCompany(company_id: number) {
   try {
     const { data } = await firstValueFrom(
-      this.httpService.get(`${this.baseUrl}/api/v1/claim/claims/by-customer/${company_id}`)
+      this.httpService.get(`${this.baseUrl}/api/v1/claim/claims/by-company/${company_id}`)
     );
     return data;
   } catch (error: any) {

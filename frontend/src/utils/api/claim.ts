@@ -86,22 +86,41 @@ export async function fetchClaimsByCustomer(): Promise<CustomerClaimsSummary[]> 
   }
 }
 
-  // 7. Fetch claims grouped by customer for a specific company
-export async function fetchClaimsByCustomerByCompany(company_id: number): Promise<CustomerClaimsSummary[]> {
+//   // 7. Fetch claims grouped by customer for a specific company
+// export async function fetchClaimsByCustomerByCompany(company_id: number): Promise<CustomerClaimsSummary[]> {
+//   try {
+//     const res = await axios.get<CustomerClaimsSummary[]>(
+//       `${BASE_URL}/claims/by-customer/${company_id}`,
+//       { headers: getAuthHeaders() }
+//     );
+//     return res.data;
+//   } catch (err: any) {
+//     if (axios.isAxiosError(err)) {
+//       if (err.response?.status === 401) throw new Error('Unauthorized');
+//       if (err.response?.status === 404) return []; // No claims found for this company
+//       throw new Error(err.response?.data?.detail || err.message);
+//     }
+//     throw new Error('Failed to load claims by company');
+//   }
+// }
+
+// 8. Fetch flat claims by company (not grouped by customer)
+export async function fetchClaimsByCustomerByCompany(company_id: number): Promise<ClaimSummary[]> {
   try {
-    const res = await axios.get<CustomerClaimsSummary[]>(
-      `${BASE_URL}/claims/by-customer/${company_id}`,
+    const res = await axios.get<ClaimSummary[]>(
+      `${BASE_URL}/claims/by-company/${company_id}`,
       { headers: getAuthHeaders() }
     );
     return res.data;
   } catch (err: any) {
     if (axios.isAxiosError(err)) {
       if (err.response?.status === 401) throw new Error('Unauthorized');
-      if (err.response?.status === 404) return []; // No claims found for this company
+      if (err.response?.status === 404) return [];
       throw new Error(err.response?.data?.detail || err.message);
     }
-    throw new Error('Failed to load claims by company');
+    throw new Error('Failed to load flat claims by company');
   }
 }
+
 
 
