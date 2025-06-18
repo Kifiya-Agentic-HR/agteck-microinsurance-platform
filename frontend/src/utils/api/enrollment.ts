@@ -6,6 +6,7 @@ export interface CustomerInfo {
   l_name: string;
   account_no: string;
   account_type: string;
+  payout_rate: Float32Array;
 }
 
 export interface EnrollmentPayload extends CustomerInfo {
