@@ -161,8 +161,8 @@ services:
   redis:
    image: redis:7
    container_name: redis
-   ports:
-      - "6379:6379"
+  #  ports:
+  #     - "6379:6379"
    networks:
       - app_network
 
@@ -179,8 +179,8 @@ services:
         condition: service_started
       redis:
         condition: service_started
-    ports:
-      - "8050:8000"
+    # ports:
+    #   - "8050:8000"
     environment:
       REDIS_HOST: redis
       DB_HOST: policy_db
@@ -266,8 +266,8 @@ services:
     depends_on:
       dfs_db:
         condition: service_started
-    ports:
-      - "8030:8000"
+    # ports:
+    #   - "8030:8000"
     environment:
       POLICY_SERVICE_URL: http://policy_service:8000
       DATABASE_URL: postgresql://${DFS_DB_USER}:${DFS_DB_PASS}@dfs_db:5432/${DFS_DB_NAME}
@@ -354,8 +354,8 @@ services:
     container_name: claim_service
     env_file:
       - .env
-    ports:
-      - "8040:8000"
+    # ports:
+    #   - "8040:8000"
     depends_on:
       claim_db:
         condition: service_healthy  # Add healthcheck dependency
