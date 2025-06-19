@@ -37,7 +37,19 @@ export default function ClaimsPage() {
         }
 
         const summary = await fetchClaimsByCustomerByCompany(company_id);
-        setData(summary);
+        // Map ClaimSummary[] to CustomerClaimsSummary[]
+        const grouped: CustomerClaimsSummary[] = Array.isArray(summary)
+          ? summary.reduce((acc: CustomerClaimsSummary[], claim) => {
+              let group = acc.find(g => g.customer_id === claim.policy_id); // Adjust grouping key as needed
+              if (!group) {
+                group = { customer_id: claim.policy_id, claims: [] }; // Adjust grouping key as needed
+                acc.push(group);
+              }
+              group.claims.push(claim);
+              return acc;
+            }, [])
+          : [];
+        setData(grouped);
       } catch (e: any) {
         const msg = e.message.toLowerCase();
         if (msg.includes('unauthorized')) {
@@ -56,15 +68,17 @@ export default function ClaimsPage() {
   }, []);
 
   const exportRows = data.flatMap(group =>
-    group.claims.map(c => ({
-      customerId: group.customer_id,
-      policyId: c.policy_id,
-      claimType: c.claim_type,
-      claimAmount: c.claim_amount,
-      status: c.status,
-      gridId: c.grid_id,
-      period: c.period,
-    }))
+  Array.isArray(group.claims)
+    ? group.claims.map(c => ({
+        customerId: group.customer_id,
+        policyId: c.policy_id,
+        claimType: c.claim_type,
+        claimAmount: c.claim_amount,
+        status: c.status,
+        gridId: c.grid_id,
+        period: c.period,
+      }))
+    : []
   );
 
   const csvHeaders = [
@@ -119,7 +133,9 @@ export default function ClaimsPage() {
 
   if (error) return <div className="text-red-600">{error}</div>;
 
-  if (data.length === 0 || data[0].claims.length === 0) {
+  const hasAnyClaims = data.some(group => Array.isArray(group.claims) && group.claims.length > 0);
+
+  if (!hasAnyClaims) {
     return (
       <div className="flex min-h-screen bg-[#f9f8f3] text-[#2c423f]">
         <Sidebar />

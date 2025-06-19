@@ -1,26 +1,40 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+import asyncio
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.database.crud.enrolement_crud import EnrolementService
 from src.database.crud.customer_crud import CustomerService
 from src.schemas.enrolement_schema import EnrolementRequest, EnrolementResponse, CustomerResponse
-from src.database.db import get_db
 from src.schemas.customer_schema import CustomerRequest
+from src.database.db import get_db
 from src.core.config import settings
 from src.utils.grid_and_zone_getter import GridAndZoneGetter
-import httpx
+from src.utils.payout_calculator import fetch_and_update_payout_rate
 from src.database.models.customer import Customer
 
 POLICY_SERVICE_URL = settings.POLICY_SERVICE_URL + '/api'
 
-# Initialize GridAndZoneGetter
+router = APIRouter()
 grid_zone_getter = GridAndZoneGetter()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+
+async def build_customer_response(db_customer: Customer, db: Session) -> CustomerResponse:
+    payout_rate = await fetch_and_update_payout_rate(db_customer.customer_id, db)
+    return CustomerResponse(
+        customer_id=db_customer.customer_id,
+        f_name=db_customer.f_name,
+        m_name=db_customer.m_name,
+        l_name=db_customer.l_name,
+        account_no=db_customer.account_no,
+        account_type=db_customer.account_type,
+        payout_rate=payout_rate,
+    )
+
 
 @router.post("/", response_model=EnrolementResponse, status_code=201)
 def create_enrolement(
@@ -90,20 +104,26 @@ def create_enrolement(
         raise HTTPException(status_code=500, detail="Enrollment creation failed")
 
     # 5) Prepare customer response
-    cust_dict = CustomerResponse(
+    db_customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
+    payout_rate = asyncio.run(fetch_and_update_payout_rate(db_customer.customer_id, db))
+
+    customer_response = CustomerResponse(
         customer_id=customer_id,
         f_name=enrolement.f_name,
         m_name=enrolement.m_name,
         l_name=enrolement.l_name,
         account_no=enrolement.account_no,
         account_type=enrolement.account_type,
+        payout_rate=payout_rate,
     ).dict()
 
     # 6) Return enrollment response
+    logger.info(f"Final enrollment response for customer_id {customer_id}")
+
     response = EnrolementResponse(
         enrolement_id=enroll_id,
         customer_id=customer_id,
-        customer=cust_dict,
+        customer=customer_response,
         createdAt=created_at,
         user_id=enrolement.user_id,
         status="pending",
@@ -126,26 +146,19 @@ def create_enrolement(
 
 
 @router.get("/{enrollment_id}", response_model=EnrolementResponse)
-def read_enrolement(
-    enrollment_id: int,
-    db: Session = Depends(get_db)
-):
+async def read_enrolement(enrollment_id: int, db: Session = Depends(get_db)):
     service = EnrolementService(db)
     db_enr = service.get_enrolement(enrollment_id)
     if not db_enr:
         raise HTTPException(status_code=404, detail="Enrollment not found")
+
     db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
-    result = EnrolementResponse(
+    customer = await build_customer_response(db_customer, db)
+
+    return EnrolementResponse(
         enrolement_id=db_enr.enrolment_id,
         customer_id=db_enr.customer_id,
-        customer=CustomerResponse(
-            customer_id=db_customer.customer_id,
-            f_name=db_customer.f_name,
-            m_name=db_customer.m_name,
-            l_name=db_customer.l_name,
-            account_no=db_customer.account_no,
-            account_type=db_customer.account_type,
-        ),
+        customer=customer,
         createdAt=db_enr.createdAt,
         user_id=db_enr.user_id,
         status=db_enr.status,
@@ -161,8 +174,8 @@ def read_enrolement(
         grid=db_enr.grid,
         lattitude=db_enr.lattitude,
         longitude=db_enr.longitude,
-    )
-    return result
+        payout_rate=customer.payout_rate
+        )
 
 
 @router.get("/by-company/{company_id}", response_model=list[EnrolementResponse])
@@ -175,17 +188,11 @@ def get_enrollments_by_company_id(
     result = []
     for db_enr in enrollments:
         db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
+        customer = asyncio.run(build_customer_response(db_customer, db))
         enrol = EnrolementResponse(
             enrolement_id=db_enr.enrolment_id,
             customer_id=db_enr.customer_id,
-            customer=CustomerResponse(
-                customer_id=db_customer.customer_id,
-                f_name=db_customer.f_name,
-                m_name=db_customer.m_name,
-                l_name=db_customer.l_name,
-                account_no=db_customer.account_no,
-                account_type=db_customer.account_type,
-            ),
+            customer=customer,
             createdAt=db_enr.createdAt,
             user_id=db_enr.user_id,
             status=db_enr.status,
@@ -201,6 +208,7 @@ def get_enrollments_by_company_id(
             grid=db_enr.grid,
             lattitude=db_enr.lattitude,
             longitude=db_enr.longitude,
+            payout_rate=customer.payout_rate
         )
         result.append(enrol)
     return result
@@ -215,17 +223,11 @@ def get_enrollments_by_user_id(
     result = []
     for db_enr in enrollments:
         db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
+        customer = asyncio.run(build_customer_response(db_customer, db))
         enrol = EnrolementResponse(
             enrolement_id=db_enr.enrolment_id,
             customer_id=db_enr.customer_id,
-            customer=CustomerResponse(
-                customer_id=db_customer.customer_id,
-                f_name=db_customer.f_name,
-                m_name=db_customer.m_name,
-                l_name=db_customer.l_name,
-                account_no=db_customer.account_no,
-                account_type=db_customer.account_type,
-            ),
+            customer=customer,
             createdAt=db_enr.createdAt,
             user_id=db_enr.user_id,
             status=db_enr.status,
@@ -241,6 +243,7 @@ def get_enrollments_by_user_id(
             grid=db_enr.grid,
             lattitude=db_enr.lattitude,
             longitude=db_enr.longitude,
+            payout_rate=customer.payout_rate
         )
         result.append(enrol)
     return result
@@ -250,21 +253,15 @@ def list_enrolements(
     db: Session = Depends(get_db)
 ):
     service = EnrolementService(db)
-    enrollments =  service.get_enrolements()
+    enrollments = service.get_enrolements()
     result = []
     for db_enr in enrollments:
         db_customer = db.query(Customer).filter(Customer.customer_id == db_enr.customer_id).first()
+        customer = asyncio.run(build_customer_response(db_customer, db))
         enrol = EnrolementResponse(
             enrolement_id=db_enr.enrolment_id,
             customer_id=db_enr.customer_id,
-            customer=CustomerResponse(
-                customer_id=db_customer.customer_id,
-                f_name=db_customer.f_name,
-                m_name=db_customer.m_name,
-                l_name=db_customer.l_name,
-                account_no=db_customer.account_no,
-                account_type=db_customer.account_type,
-            ),
+            customer=customer,
             createdAt=db_enr.createdAt,
             user_id=db_enr.user_id,
             status=db_enr.status,
@@ -280,37 +277,44 @@ def list_enrolements(
             grid=db_enr.grid,
             lattitude=db_enr.lattitude,
             longitude=db_enr.longitude,
+            payout_rate=customer.payout_rate
         )
         result.append(enrol)
     return result
 
 @router.put("/{enrollment_id}/approve")
-def approve_enrolement(
+async def approve_enrolement(
     enrollment_id: int,
     db: Session = Depends(get_db)
 ):
     service = EnrolementService(db)
+    
     try:
         result = service.approve_enrolement(enrollment_id)
     except HTTPException as e:
         raise e
 
-    if result:
-        url = f"{POLICY_SERVICE_URL}/policy"
-        payload = {
-            "enrollment_id": enrollment_id,
-        }
-        try:
-            response = httpx.post(url, json=payload)
+    if not result:
+        raise HTTPException(status_code=400, detail="Enrollment approval failed")
+
+    url = f"{POLICY_SERVICE_URL}/policy"
+    payload = {"enrollment_id": enrollment_id}
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(url, json=payload)
             response.raise_for_status()
-            return {
-                "sucess": True,
-                "message": f"Enrollment for {enrollment_id} approved and policy created successfully",
-            }
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=500, detail=f"Policy service request failed: {e}")
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(status_code=response.status_code, detail=f"Policy service error: {e}")
+        return {
+            "success": True,
+            "message": f"Enrollment for {enrollment_id} approved and policy created successfully",
+            "data": result  # Ensure result is serializable
+        }
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Policy service request failed: {e}")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=response.status_code, detail=f"Policy service error: {e}")
+
+
 
 @router.put("/{enrollment_id}/reject")
 def reject_enrolement(

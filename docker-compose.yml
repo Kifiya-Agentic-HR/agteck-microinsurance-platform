@@ -179,8 +179,8 @@ services:
         condition: service_started
       redisdb:
         condition: service_started
-    ports:
-      - "8050:8000"
+    # ports:
+    #   - "8050:8000"
     environment:
       REDIS_HOST: redisdb
       DB_HOST: policy_db
@@ -266,17 +266,22 @@ services:
     depends_on:
       dfs_db:
         condition: service_started
+    # ports:
+    #   - "8030:8000"
     environment:
       POLICY_SERVICE_URL: http://policy_service:8000
       DATABASE_URL: postgresql://${DFS_DB_USER}:${DFS_DB_PASS}@dfs_db:5432/${DFS_DB_NAME}
     networks:
       - app_network
+    volumes:
+      - ./services/dfs/src:/app/src  
 
   dfs_db:
     image: postgres:16
     container_name: dfs_db
     env_file:
       - .env
+  # Expose the DFS DB on a different port
     environment:
       POSTGRES_USER: ${DFS_DB_USER}
       POSTGRES_PASSWORD: ${DFS_DB_PASS}
@@ -333,7 +338,8 @@ services:
       POSTGRES_USER: claim_user  
       POSTGRES_PASSWORD: claim_password  
       POSTGRES_DB: claim_db  
-     
+    volumes:
+      - pgdata_claim:/var/lib/postgresql/data     
     healthcheck:  # Add healthcheck
       test: ["CMD-SHELL", "pg_isready -U claim_user -d claim_db"]
       interval: 5s
@@ -348,8 +354,8 @@ services:
     container_name: claim_service
     env_file:
       - .env
-    ports:
-      - "8040:8000"
+    # ports:
+    #   - "8040:8000"
     depends_on:
       claim_db:
         condition: service_healthy  # Add healthcheck dependency
@@ -455,7 +461,6 @@ services:
       - app_network
 
 volumes:
-  claim_pgdata:
   pgdata_company:
   pgdata_product:
   pgdata_users:

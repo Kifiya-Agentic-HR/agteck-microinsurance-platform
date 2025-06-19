@@ -81,7 +81,7 @@ export class ClaimsController {
   }
 
   @Roles(Role.IC, Role.Agent)
-@Get('/claims/by-customer/:company_id')
+@Get('/claims/by-company/:company_id')
 @ApiOperation({ summary: 'Get claims grouped by customer for a specific company' })
 @ApiResponse({ status: 200, description: 'List of customer claim summaries for the given company' })
 @ApiResponse({ status: 404, description: 'No claims found for this company' })

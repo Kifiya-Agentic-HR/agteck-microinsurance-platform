@@ -15,10 +15,10 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Ensure Unix line endings and make entrypoint executable
-RUN apt-get update && apt-get install -y dos2unix \
+RUN apt-get update && apt-get install -y gcc python3-dev libpq-dev dos2unix \
     && dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh
-
+    
 EXPOSE 8000
 
 RUN chmod +x entrypoint.sh

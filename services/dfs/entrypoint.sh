@@ -1,8 +1,9 @@
-#!/bin/sh
-# entrypoint.sh
+#!/bin/bash
 
-# Run initial migrations (if no migration exists, alembic will create one based on your autogenerate settings)
+set -e  # Exit on error
+
+echo "Running Alembic migrations..."
 alembic upgrade head
 
-# Start the FastAPI application
+echo "Starting FastAPI server..."
 exec uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload

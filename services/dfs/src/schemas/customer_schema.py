@@ -13,3 +13,4 @@ class CustomerResponse(BaseModel):
     l_name: str
     account_no: str
     account_type: str
+    payout_rate: float = 0.0

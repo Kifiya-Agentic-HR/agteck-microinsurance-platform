@@ -26,7 +26,7 @@ export function generateEnrollmentPDF(enrollment: EnrollmentResponse) {
   doc.text(`Sum Insured: $${enrollment.sum_insured}`, 110, 102);
   doc.text(`Coverage Period: ${enrollment.date_from} to ${enrollment.date_to}`, 22, 109);
   doc.text(`CPS Zone: ${enrollment.cps_zone}`, 22, 116);
-  doc.text(`Coordinates: (${enrollment.longtiude}, ${enrollment.latitude})`, 110, 116);
+  doc.text(`Coordinates: (${enrollment.longtiude}, ${enrollment.lattitude})`, 110, 116);
 
   doc.setFontSize(10);
   doc.setTextColor(100);
