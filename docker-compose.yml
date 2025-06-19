@@ -82,7 +82,6 @@ services:
       product_db:
         condition: service_healthy
     environment:
-      # at runtime, the app can read its DB URL here
       DATABASE_URL: postgresql://postgres:password@product_db:5432/productdb
       CLAIM_SERVICE_URL: http://claim_service:8000/api/claim
     networks:
