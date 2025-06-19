@@ -14,7 +14,7 @@ The platform provides RESTful APIs for:
 
 ---
 
-## 🧱 Core Modules & Features
+## Core Modules & Features
 
 ### 🔐 Authentication & User Roles
 - Admin, Agent, and Customer roles
