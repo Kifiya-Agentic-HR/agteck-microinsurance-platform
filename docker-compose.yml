@@ -179,8 +179,6 @@ services:
         condition: service_started
       redisdb:
         condition: service_started
-    # ports:
-    #   - "8050:8000"
     environment:
       REDIS_HOST: redisdb
       DB_HOST: policy_db
