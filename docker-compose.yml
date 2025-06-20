@@ -158,11 +158,11 @@ services:
     networks:
       - app_network
 
-  redisdb:
+  redis:
    image: redis:7
-   container_name: redisdb
-   # ports:
-   #    - "6379:6379"
+   container_name: redis
+   ports:
+      - "6379:6379"
    networks:
       - app_network
 
@@ -177,12 +177,12 @@ services:
     depends_on:
       policy_db:
         condition: service_started
-      redisdb:
+      redis:
         condition: service_started
     # ports:
     #   - "8050:8000"
     environment:
-      REDIS_HOST: redisdb
+      REDIS_HOST: redis
       DB_HOST: policy_db
       DB_PORT: 5432
       DB_USER: ${POLICY_DB_USER}
@@ -274,7 +274,7 @@ services:
     networks:
       - app_network
     volumes:
-      - ./services/dfs/src:/app/src  
+      - ./services/dfs/src:/app
 
   dfs_db:
     image: postgres:16
