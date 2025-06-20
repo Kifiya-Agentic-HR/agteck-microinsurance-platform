@@ -28,4 +28,4 @@ RUN chmod +x entrypoint.sh
 RUN useradd -m appuser
 USER appuser
 # Use an entrypoint that first runs Alembic migrations then starts the API
-CMD ["./entrypoint.sh"]
+CMD /bin/sh -c "alembic upgrade head && exec uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"

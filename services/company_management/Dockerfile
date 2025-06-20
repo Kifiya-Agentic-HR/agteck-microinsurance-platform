@@ -31,6 +31,5 @@ USER appuser
 EXPOSE 8000
 
 # Use an entrypoint that first runs Alembic migrations then starts the API
-CMD ["./entrypoint.sh"]
-
+CMD /bin/sh -c "alembic upgrade head && exec uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
 
