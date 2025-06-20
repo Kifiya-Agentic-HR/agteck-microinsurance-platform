@@ -367,8 +367,6 @@ services:
     - ./services/claim_management:/app
     networks:
       - app_network
-    command: alembic stamp head
-
   dfs_tests:
     build:
       context: ./services/dfs
