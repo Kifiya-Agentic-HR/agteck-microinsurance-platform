@@ -22,13 +22,13 @@ export interface EnrollmentPayload extends CustomerInfo {
   cps_zone: string;
   longitude: string;
   grid: string;
-  lattitude: string;
+  latitude: string;
 }
 
 export interface EnrollmentResponse {
   enrolement_id: number;
   customer_id: number;
-  customer: CustomerInfo; 
+  customer: CustomerInfo;
   createdAt: string;
   user_id: number;
   status: string;
@@ -42,21 +42,24 @@ export interface EnrollmentResponse {
   product_id: number;
   cps_zone: string;
   longtiude: string;
-  lattitude: string;
+  latitude: string;
 }
 
 // const API_BASE = process.env.NEXT_PUBLIC_ENROLLMENT_API || 'http://localhost:8022/api/enrollments';
 const API_BASE = `http://${process.env.NEXT_PUBLIC_HOST}:${process.env.NEXT_PUBLIC_GATEWAY_PORT}/api/v1/enrollments`;
 
 const getAuthHeaders = (): Record<string, string> => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-  return token ? { "Authorization": `Bearer ${token}` } : {};
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export async function createEnrollment(data: EnrollmentPayload): Promise<EnrollmentResponse> {
+export async function createEnrollment(
+  data: EnrollmentPayload
+): Promise<EnrollmentResponse> {
   const res = await fetch(`${API_BASE}/`, {
-    method: 'POST',
-    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
@@ -69,15 +72,22 @@ export async function getEnrollment(id: number): Promise<EnrollmentResponse> {
   return res.json();
 }
 
-
-export async function getEnrollmentsByCompany(ic_company_id: number): Promise<EnrollmentResponse> {
-  const res = await fetch(`${API_BASE}/by-company/${ic_company_id}`, { headers: getAuthHeaders() });
+export async function getEnrollmentsByCompany(
+  ic_company_id: number
+): Promise<EnrollmentResponse> {
+  const res = await fetch(`${API_BASE}/by-company/${ic_company_id}`, {
+    headers: getAuthHeaders(),
+  });
   if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
   return res.json();
 }
 
-export async function getEnrollmentsByUser(user_id: number): Promise<EnrollmentResponse> {
-  const res = await fetch(`${API_BASE}/by-user/${user_id}`, { headers: getAuthHeaders() });
+export async function getEnrollmentsByUser(
+  user_id: number
+): Promise<EnrollmentResponse> {
+  const res = await fetch(`${API_BASE}/by-user/${user_id}`, {
+    headers: getAuthHeaders(),
+  });
   if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
   return res.json();
 }
@@ -88,19 +98,23 @@ export async function listEnrollments(): Promise<EnrollmentResponse[]> {
   return res.json();
 }
 
-export async function approveEnrollment(id: number): Promise<{ success: boolean; message: string }> {
+export async function approveEnrollment(
+  id: number
+): Promise<{ success: boolean; message: string }> {
   const res = await fetch(`${API_BASE}/${id}/approve`, {
-    method: 'PUT',
-    headers: getAuthHeaders()
+    method: "PUT",
+    headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
   return res.json();
 }
 
-export async function rejectEnrollment(id: number): Promise<{ status: string }> {
+export async function rejectEnrollment(
+  id: number
+): Promise<{ status: string }> {
   const res = await fetch(`${API_BASE}/${id}/reject`, {
-    method: 'PUT',
-    headers: getAuthHeaders()
+    method: "PUT",
+    headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
   return res.json();

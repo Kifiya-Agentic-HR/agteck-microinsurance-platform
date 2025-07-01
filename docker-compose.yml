@@ -274,7 +274,7 @@ services:
     networks:
       - app_network
     volumes:
-      - ./services/dfs/src:/app
+      - ./services/dfs:/app
 
   dfs_db:
     image: postgres:16
@@ -354,8 +354,8 @@ services:
     container_name: claim_service
     env_file:
       - .env
-    # ports:
-    #   - "8040:8000"
+    ports:
+      - "8040:8000"
     depends_on:
       claim_db:
         condition: service_healthy  # Add healthcheck dependency
@@ -389,9 +389,9 @@ services:
     env_file:
       - .env
     ports:
-      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+      - "${NEXT_PUBLIC_GATEWAY_PORT}:${NEXT_PUBLIC_GATEWAY_PORT}"
     environment:
-      - GATEWAY_PORT=${GATEWAY_PORT}
+      - NEXT_PUBLIC_GATEWAY_PORT=${NEXT_PUBLIC_GATEWAY_PORT}
       - COMPANY_SERVICE_URL=http://company_service:8000
       - PRODUCT_SERVICE_URL=http://product_service:8000
       - USER_SERVICE_URL=http://user_service:8000
@@ -440,8 +440,8 @@ services:
     build:
       context: ./frontend
       args:
-        HOST: ${HOST}
-        GATEWAY_PORT: ${GATEWAY_PORT}
+        HOST: ${NEXT_PUBLIC_HOST}
+        GATEWAY_PORT: ${NEXT_PUBLIC_GATEWAY_PORT}
         FRONTEND_PORT: ${FRONTEND_PORT}
     container_name: frontend
     env_file:
@@ -458,6 +458,8 @@ services:
       PORT: ${FRONTEND_PORT} # The port the Next.js server will listen on inside the container
     networks:
       - app_network
+    volumes:
+    - ./frontend/.next:/app/.next
 
 volumes:
   pgdata_company:

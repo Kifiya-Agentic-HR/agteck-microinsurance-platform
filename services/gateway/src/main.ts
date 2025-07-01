@@ -26,7 +26,7 @@ async function bootstrap() {
 
   app.enableCors(); // Enable CORS with default settings
 
-  const port = process.env.GATEWAY_PORT || 7000;
+  const port = process.env.NEXT_PUBLIC_GATEWAY_PORT || 7000;
   await app.listen(port);
   console.log(`Gateway is running on: ${await app.getUrl()}`);
 }

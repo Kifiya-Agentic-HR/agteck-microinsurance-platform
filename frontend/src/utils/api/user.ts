@@ -38,11 +38,13 @@ export interface UserOut {
 export interface UserUpdate {
   username?: string;
   password?: string;
+  status?: string;
+
 }
 
-export interface UserStatus{
-  status?: string;
-}
+// export interface UserStatus{
+//   status?: string;
+// }
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = getToken(); // getToken() uses localStorage.getItem('token')
@@ -218,7 +220,7 @@ export async function getAgentUsers(): Promise<UserOut[]> { // Removed token par
  * 10. Update a user account
  */
 export async function updateUserStatus(
-  userId: string, data: UserStatus
+  userId: string, data: UserUpdate
 ): Promise<UserOut> {
   const res = await fetch(`${API_BASE}/api/user/update-status/${userId}`, {
     method: 'PUT',
